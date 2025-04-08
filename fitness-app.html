@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>健身減脂 App</title>
+  <style>
+    body {
+      font-family: "Helvetica Neue", sans-serif;
+      margin: 0;
+      background: #f9fafb;
+      color: #111;
+    }
+    header {
+      background: #111827;
+      color: white;
+      text-align: center;
+      padding: 1rem;
+    }
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      background: #e5e7eb;
+    }
+    nav button {
+      flex: 1;
+      min-width: 20%;
+      padding: 1rem;
+      border: none;
+      background: #f3f4f6;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    nav button.active {
+      background: #2563eb;
+      color: white;
+    }
+    .section {
+      display: none;
+      padding: 1rem;
+    }
+    .section.active {
+      display: block;
+    }
+    .day-tabs {
+      display: flex;
+      overflow-x: auto;
+      margin-bottom: 1rem;
+    }
+    .day-tabs button {
+      flex: none;
+      padding: 0.5rem 1rem;
+      margin-right: 4px;
+      border: none;
+      background: #e0e0e0;
+      cursor: pointer;
+    }
+    .day-tabs button.active {
+      background: #3b82f6;
+      color: white;
+    }
+    ul {
+      padding-left: 1.2rem;
+    }
+    li {
+      margin-bottom: 0.5rem;
+    }
+    .meal-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1rem;
+    }
+    .meal-table th, .meal-table td {
+      border: 1px solid #ccc;
+      padding: 6px;
+      font-size: 0.95rem;
+    }
+    .meal-table th {
+      background: #f3f4f6;
+    }
+    canvas {
+      max-width: 100%;
+      margin-top: 1rem;
+    }
+    input[type="number"], input[type="date"] {
+      padding: 0.5rem;
+      font-size: 1rem;
+      margin-right: 0.5rem;
+    }
+    button {
+      margin: 0.3rem;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>🏋️ 健身減脂追蹤 App</h1>
+</header>
+
+<nav>
+  <button class="tab active" onclick="switchTab('track')">✅ 每日追蹤</button>
+  <button class="tab" onclick="switchTab('workout')">🏋️ 訓練計劃</button>
+  <button class="tab" onclick="switchTab('meal')">🍱 飲食建議</button>
+  <button class="tab" onclick="switchTab('weight')">⚖️ 體重紀錄</button>
+  <button class="tab" onclick="switchTab('nutrition')">🥗 營養統計</button>
+</nav>
+
+<!-- 每日追蹤 -->
+<div id="track" class="section active">
+  <div class="day-tabs" id="track-tabs"></div>
+  <div id="track-content"></div>
+</div>
+
+<!-- 訓練計劃 -->
+<div id="workout" class="section">
+  <div class="day-tabs" id="workout-tabs"></div>
+  <div id="workout-content"></div>
+</div>
+
+<!-- 飲食建議 -->
+<div id="meal" class="section">
+  <div class="day-tabs" id="meal-tabs"></div>
+  <div id="meal-content"></div>
+</div>
+
+<!-- 體重紀錄 -->
+<div id="weight" class="section">
+  <h2>⚖️ 體重紀錄</h2>
+  <input type="date" id="weightDate" />
+  <input type="number" id="weightValue" placeholder="請輸入體重 (kg)" />
+  <button onclick="saveWeight()">儲存</button>
+  <button onclick="clearWeight()">清除資料</button>
+  <canvas id="weightChart" width="300" height="300"></canvas>
+</div>
+
+<!-- 營養圖表 -->
+<div id="nutrition" class="section">
+  <h2>🥗 每日營養比例</h2>
+  <div class="day-tabs" id="nutrition-tabs"></div>
+  <canvas id="pieChart" width="300" height="300"></canvas>
+</div>
+<script>
+const days = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"];
+
+// 每日任務
+const trackingItems = [
+  ["完成早餐", "完成午餐", "完成晚餐", "補充乳清", "完成訓練", "伸展放鬆"],
+  ["完成早餐", "完成午餐", "完成晚餐", "補充乳清", "完成訓練", "伸展放鬆"],
+  ["完成早餐", "完成午餐", "完成晚餐", "補充蛋白", "完成腿臀訓練", "泡沫軸"],
+  ["完成早餐", "完成午餐", "完成晚餐", "低碳日", "有氧完成", "伸展完成"],
+  ["完成早餐", "完成午餐", "完成晚餐", "蛋白足夠", "胸背訓練完成", "核心訓練"],
+  ["完成早餐", "完成午餐", "完成晚餐", "活動 ≥30 分鐘", "下半身訓練", "多喝水"],
+  ["完成早餐", "完成午餐", "完成晚餐", "休息", "泡沫軸", "深層伸展"]
+];
+
+// 每日營養統計 (蛋白質、碳水、脂肪)
+const nutritionData = [
+  { protein: 180, carbs: 150, fat: 50 },
+  { protein: 170, carbs: 140, fat: 60 },
+  { protein: 190, carbs: 130, fat: 55 },
+  { protein: 160, carbs: 110, fat: 70 },
+  { protein: 200, carbs: 160, fat: 50 },
+  { protein: 150, carbs: 140, fat: 60 },
+  { protein: 0, carbs: 0, fat: 0 }
+];
+
+// 假資料：訓練項目與影片
+  const workouts = [
+    [["器械：坐姿推胸機", "4×10", "https://www.youtube.com/watch?v=6JtP6ju0IMw"],
+     ["槓鈴臥推", "4×8", "https://www.youtube.com/watch?v=rT7DgCr-3pg"],
+     ["啞鈴飛鳥", "3×12", "https://www.youtube.com/watch?v=eozdVDA78K0"],
+     ["滑輪三頭下壓", "3×15", "https://www.youtube.com/watch?v=vB5OHsJ3EME"],
+     ["仰臥抬腿", "3×20", "https://www.youtube.com/watch?v=JB2oyawG9KI"]],
+    [["滑輪下拉", "4×12", "https://www.youtube.com/watch?v=CAwf7n6Luuc"],
+     ["啞鈴划船", "3×10", "https://www.youtube.com/watch?v=pYcpY20QaE8"],
+     ["滑輪彎舉", "3×12", "https://www.youtube.com/watch?v=ykJmrZ5v0Oo"],
+     ["槌式彎舉", "3×10", "https://www.youtube.com/watch?v=av7-8igSXTs"],
+     ["反向飛鳥機", "3×15", "https://www.youtube.com/watch?v=2JbM2sU6a4E"]],
+    [["深蹲", "4×8", "https://www.youtube.com/watch?v=SW_C1A-rejs"],
+     ["腿推機", "4×12", "https://www.youtube.com/watch?v=IZxyjW7MPJQ"],
+     ["腿屈伸", "3×15", "https://www.youtube.com/watch?v=8kPyrqg-3EY"],
+     ["腿彎舉", "3×12", "https://www.youtube.com/watch?v=1Tq3QdYUuHs"],
+     ["啞鈴臀橋", "3×15", "https://www.youtube.com/watch?v=LM8XHLYJoYs"]],
+    [["啞鈴肩推", "4×10", "https://www.youtube.com/watch?v=qEwKCR5JCog"],
+     ["側平舉", "3×15", "https://www.youtube.com/watch?v=3VcKaXpzqRo"],
+     ["前平舉", "3×12", "https://www.youtube.com/watch?v=-t7fuZ0KhDA"],
+     ["啞鈴聳肩", "3×15", "https://www.youtube.com/watch?v=0UE5sFSG6aI"],
+     ["棒式撐體", "3×30s", "https://www.youtube.com/watch?v=pSHjTRCQxIw"]],
+    [["超級組：臥推 + 滑輪划船", "4×10/12", "https://www.youtube.com/watch?v=rT7DgCr-3pg"],
+     ["上斜推 + 啞鈴划船", "3×12/12", "https://www.youtube.com/watch?v=6TSP1TRMUzs"],
+     ["飛鳥 + 反向飛鳥", "3×15/15", "https://www.youtube.com/watch?v=eozdVDA78K0"],
+     ["仰臥起坐 + 捲腹", "3×20", "https://www.youtube.com/watch?v=1fbU_MkV7NE"]],
+    [["腿屈伸 + 彎舉", "3×15/15", "https://www.youtube.com/watch?v=8kPyrqg-3EY"],
+     ["箭步蹲", "3×12 每腳", "https://www.youtube.com/watch?v=QOVaHwm-Q6U"],
+     ["臀推", "3×15", "https://www.youtube.com/watch?v=LM8XHLYJoYs"],
+     ["跑步機有氧", "20–30 分", "https://www.youtube.com/watch?v=ml6cT4AZdqI"]],
+    []
+  ];
+
+// 飲食建議（簡化示意）
+const meals = [
+    {
+      早餐: [["燕麥", "60g", "220 kcal"], ["全蛋+蛋白", "2+3", "180 kcal"], ["豆漿", "250ml", "80 kcal"], ["香蕉", "1 根", "70 kcal"]],
+      午餐: [["糙米飯", "150g", "210 kcal"], ["雞胸肉", "180g", "220 kcal"], ["雞蛋", "1 顆", "70 kcal"], ["青花菜", "100g", "30 kcal"], ["橄欖油", "1 湯匙", "120 kcal"]],
+      晚餐: [["地瓜", "200g", "180 kcal"], ["鮭魚", "100g", "200 kcal"], ["青菜", "150g", "40 kcal"], ["豆腐", "100g", "100 kcal"], ["橄欖油", "1 茶匙", "45 kcal"]],
+    },
+    {
+      早餐: [["吐司", "2 片", "160 kcal"], ["蛋+蛋白", "1+3", "150 kcal"], ["乳酪", "100g", "80 kcal"], ["奇異果", "1 顆", "50 kcal"]],
+      午餐: [["藜麥", "100g", "120 kcal"], ["牛肩肉", "150g", "280 kcal"], ["炒蔬菜", "150g", "70 kcal"], ["橄欖油", "1 湯匙", "120 kcal"]],
+      晚餐: [["地瓜", "150g", "120 kcal"], ["豆腐", "150g", "150 kcal"], ["水煮蛋", "1 顆", "70 kcal"], ["菠菜", "150g", "40 kcal"]],
+    },
+    {
+      早餐: [["乳清蛋白", "1 份", "120 kcal"], ["香蕉", "1 根", "70 kcal"], ["堅果", "10g", "60 kcal"]],
+      午餐: [["糙米飯", "150g", "210 kcal"], ["雞胸肉", "180g", "220 kcal"], ["青花菜", "150g", "50 kcal"], ["橄欖油", "1 湯匙", "120 kcal"]],
+      晚餐: [["紫薯", "150g", "150 kcal"], ["鮭魚", "100g", "200 kcal"], ["豆芽", "100g", "80 kcal"]],
+    },
+    {
+      早餐: [["地瓜", "150g", "120 kcal"], ["水煮蛋", "2 顆", "140 kcal"], ["牛奶", "250ml", "100 kcal"]],
+      午餐: [["五穀飯", "150g", "210 kcal"], ["鯛魚", "120g", "150 kcal"], ["青菜", "150g", "50 kcal"], ["橄欖油", "1 湯匙", "120 kcal"]],
+      晚餐: [["豆腐", "100g", "100 kcal"], ["雞蛋", "1 顆", "70 kcal"], ["青菜", "150g", "50 kcal"], ["紫薯", "100g", "100 kcal"]],
+    },
+    {
+      早餐: [["雞蛋", "2 顆", "140 kcal"], ["吐司", "2 片", "160 kcal"], ["豆漿", "250ml", "80 kcal"]],
+      午餐: [["糙米飯", "150g", "210 kcal"], ["雞胸肉", "200g", "240 kcal"], ["蛋白棒", "1 條", "150 kcal"]],
+      晚餐: [["鮭魚", "120g", "220 kcal"], ["青菜", "150g", "50 kcal"], ["地瓜", "150g", "120 kcal"]],
+    },
+    {
+      早餐: [["水果沙拉", "200g", "120 kcal"], ["乳清蛋白", "1 份", "120 kcal"]],
+      午餐: [["外食選擇（湯、蒸食）", "1 套", "450 kcal"]],
+      晚餐: [["沙拉 + 蛋白質", "1 份", "300 kcal"]],
+    },
+    {}
+  ];
+
+
+// 頁籤切換
+function switchTab(id) {
+  document.querySelectorAll(".tab").forEach(btn => btn.classList.remove("active"));
+  document.querySelectorAll(".section").forEach(sec => sec.classList.remove("active"));
+  document.querySelector(`.tab[onclick*="${id}"]`).classList.add("active");
+  document.getElementById(id).classList.add("active");
+}
+
+// 建立 day-tabs（可重用）
+function buildDayTabs(containerId, renderer) {
+  const container = document.getElementById(containerId);
+  const contentId = containerId.replace("-tabs", "-content");
+  container.innerHTML = "";
+  days.forEach((day, i) => {
+    const btn = document.createElement("button");
+    btn.textContent = day;
+    btn.onclick = () => {
+      container.querySelectorAll("button").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById(contentId).innerHTML = renderer(i);
+    };
+    if (i === 0) btn.classList.add("active");
+    container.appendChild(btn);
+  });
+  document.getElementById(contentId).innerHTML = renderer(0);
+}
+
+// 打勾追蹤
+buildDayTabs("track-tabs", i => {
+  const key = `track-${i}`;
+  const saved = JSON.parse(localStorage.getItem(key) || "[]");
+  return `<ul>${trackingItems[i].map((item, idx) => {
+    const checked = saved.includes(idx) ? "checked" : "";
+    return `<li><input type="checkbox" data-idx="${idx}" data-day="${i}" ${checked}> ${item}</li>`;
+  }).join("")}</ul>`;
+});
+
+// 監聽勾選儲存
+document.addEventListener("change", e => {
+  if (e.target.matches('input[type="checkbox"][data-day]')) {
+    const day = e.target.getAttribute("data-day");
+    const idx = parseInt(e.target.getAttribute("data-idx"));
+    const key = `track-${day}`;
+    let data = JSON.parse(localStorage.getItem(key) || "[]");
+    if (e.target.checked && !data.includes(idx)) data.push(idx);
+    if (!e.target.checked && data.includes(idx)) data = data.filter(i => i !== idx);
+    localStorage.setItem(key, JSON.stringify(data));
+  }
+});
+
+// 訓練內容
+buildDayTabs("workout-tabs", i => {
+  if (!workouts[i].length) return "<p>休息日 💆‍♀️</p>";
+  return `<ul>${workouts[i].map(([title, sets, url]) =>
+    `<li><a href="${url}" target="_blank">${title}</a> - ${sets}</li>`).join("")}</ul>`;
+});
+
+// 飲食內容
+buildDayTabs("meal-tabs", i => {
+  const m = meals[i];
+  if (!m.早餐) return "<p>內容準備中...</p>";
+  return ["早餐", "午餐", "晚餐"].map(meal =>
+    `<h3>${meal}</h3><table class="meal-table">
+      <tr><th>食物</th><th>份量</th><th>熱量</th></tr>
+      ${m[meal].map(([food, amount, kcal]) =>
+        `<tr><td>${food}</td><td>${amount}</td><td>${kcal}</td></tr>`).join("")}
+    </table>`).join("");
+});
+// ===== 體重紀錄儲存與繪圖 =====
+function saveWeight() {
+  const date = document.getElementById("weightDate").value;
+  const kg = document.getElementById("weightValue").value;
+  if (!date || !kg) return alert("請輸入日期與體重");
+  let data = JSON.parse(localStorage.getItem("weights") || "[]");
+  const existing = data.find(d => d.date === date);
+  if (existing) existing.kg = parseFloat(kg);
+  else data.push({ date, kg: parseFloat(kg) });
+  data.sort((a, b) => new Date(a.date) - new Date(b.date));
+  localStorage.setItem("weights", JSON.stringify(data));
+  renderChart();
+}
+
+function clearWeight() {
+  if (confirm("確定要刪除所有體重資料？")) {
+    localStorage.removeItem("weights");
+    renderChart();
+  }
+}
+
+function renderChart() {
+  const canvas = document.getElementById("weightChart");
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const data = JSON.parse(localStorage.getItem("weights") || "[]");
+  if (!data.length) {
+    ctx.fillText("尚無資料", 10, 20);
+    return;
+  }
+
+  const dates = data.map(d => d.date);
+  const weights = data.map(d => d.kg);
+  const max = Math.max(...weights) + 2;
+  const min = Math.min(...weights) - 2;
+  const w = canvas.width, h = canvas.height;
+  const pad = 40;
+  const stepX = (w - pad * 2) / (weights.length - 1 || 1);
+  const stepY = (h - pad * 2) / (max - min || 1);
+
+  // 軸線
+  ctx.beginPath();
+  ctx.moveTo(pad, pad);
+  ctx.lineTo(pad, h - pad);
+  ctx.lineTo(w - pad, h - pad);
+  ctx.strokeStyle = "#888";
+  ctx.stroke();
+
+  // 折線
+  ctx.beginPath();
+  weights.forEach((kg, i) => {
+    const x = pad + i * stepX;
+    const y = h - pad - (kg - min) * stepY;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    ctx.fillStyle = "#1f77b4";
+    ctx.beginPath();
+    ctx.arc(x, y, 3, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.strokeStyle = "#1f77b4";
+  ctx.stroke();
+
+  // 標籤
+  ctx.font = "12px sans-serif";
+  ctx.fillStyle = "#333";
+  weights.forEach((kg, i) => {
+    const x = pad + i * stepX;
+    const y = h - pad - (kg - min) * stepY;
+    ctx.fillText(dates[i].slice(5), x - 15, h - 10);
+    ctx.fillText(kg + "kg", x - 15, y - 10);
+  });
+}
+
+// 初始化體重圖
+document.addEventListener("DOMContentLoaded", renderChart);
+
+
+// ===== 營養圓餅圖 =====
+function drawPieChart(dayIndex) {
+  const canvas = document.getElementById("pieChart");
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, 300, 300);
+
+  const data = nutritionData[dayIndex];
+  const total = data.protein + data.carbs + data.fat;
+  if (total === 0) {
+    ctx.fillText("尚無資料", 100, 150);
+    return;
+  }
+
+  const colors = ["#10b981", "#3b82f6", "#f59e0b"];
+  const labels = ["蛋白質", "碳水", "脂肪"];
+  const values = [data.protein, data.carbs, data.fat];
+  let start = 0;
+
+  values.forEach((val, i) => {
+    const angle = (val / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(150, 150);
+    ctx.arc(150, 150, 120, start, start + angle);
+    ctx.closePath();
+    ctx.fillStyle = colors[i];
+    ctx.fill();
+    start += angle;
+  });
+
+  labels.forEach((label, i) => {
+    ctx.fillStyle = colors[i];
+    ctx.fillRect(10, 10 + i * 20, 12, 12);
+    ctx.fillStyle = "#333";
+    ctx.fillText(`${label}: ${values[i]}g`, 30, 20 + i * 20);
+  });
+}
+
+// 營養圖表 Tabs
+buildDayTabs("nutrition-tabs", i => {
+  drawPieChart(i);
+  return `<p>蛋白質：${nutritionData[i].protein}g，碳水：${nutritionData[i].carbs}g，脂肪：${nutritionData[i].fat}g</p>`;
+});
+</script>
+</body>
+</html>
